@@ -50,14 +50,24 @@
 - [x] Extend the OpenAPI contract and RestAssured scenarios for signatures, stale events, retries, and deduplication.
 - [ ] Run Maven verify and address any failures.
 
+## Slice 6: React customer web app (implemented in source, verification pending)
+
+- [x] Add a responsive account overview with ledger, available, pending, and transaction history.
+- [x] Integrate secure local OIDC Authorization Code with PKCE and bearer-protected account APIs.
+- [x] Add same-currency transfers with idempotency and simulator checkout for approved, declined, and pending outcomes.
+- [x] Add configurable API CORS and local web setup documentation.
+- [x] Add a locked web dependency tree and production build.
+- [x] Add Playwright sign-in smoke journeys and browser CI with failure diagnostics.
+- [ ] Expand Playwright coverage to authenticated account, transfer, checkout, and failure journeys.
+
 ## Next slices
 
-1. Add reversals and reconciliation behavior.
-2. Add ledger reversals and reconciliation exception workflows.
-3. Add broader RestAssured contract, boundary, and fault-injection coverage.
-4. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
+1. Add ledger reversals and reconciliation exception workflows.
+2. Add broader RestAssured contract, boundary, and fault-injection coverage.
+3. Add Playwright journey coverage, browser CI, and reliability reporting.
+4. Build the React Native app and Detox baseline, then expand the Mobilewright migration suite.
 5. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.
-6. Finish CI reports, deployment workflow, and GitHub Pages case study.
+6. Finish API/web/mobile CI reports, deployment workflow, and GitHub Pages case study.
 
 ## Release decisions still needed
 

@@ -16,6 +16,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,22 +28,26 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class SecurityConfig {
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http,
                                     Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter,
-                                    ObjectMapper objectMapper)
+                                    ObjectMapper objectMapper,
+                                    CorsConfigurationSource corsConfigurationSource)
             throws Exception {
         var authenticationEntryPoint = authenticationEntryPoint(objectMapper);
         var accessDeniedHandler = accessDeniedHandler(objectMapper);
         return http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(authenticationEntryPoint)
@@ -56,6 +63,22 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${parcelflow.cors.allowed-origins}") String allowedOrigins) {
+        var cors = new CorsConfiguration();
+        cors.setAllowedOrigins(Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(origin -> !origin.isEmpty()).toList());
+        cors.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Request-Id",
+                "X-Webhook-Timestamp", "X-Webhook-Signature"));
+        cors.setExposedHeaders(List.of("ETag", "Location", "X-Request-Id"));
+        cors.setAllowCredentials(false);
+        cors.setMaxAge(3600L);
+        var source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", cors);
+        return source;
     }
 
     private AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {

@@ -1,10 +1,26 @@
-**/target/
-**/node_modules/
-**/build/
-**/dist/
+# Node workspaces
+node_modules/
+apps/*/node_modules/
+tests/*/node_modules/
+apps/*/dist/
+apps/*/.pw-browsers/
+apps/*/playwright-report/
+apps/*/test-results/
+tests/*/playwright-report/
+tests/*/test-results/
+
+# Local secrets and configuration
 .env
 .env.*
 !.env.example
+apps/*/.env
+apps/*/.env.*
+!apps/*/.env.example
+
+# Java builds and editor files
+target/
+**/target/
+.idea/
+.vscode/
+*.iml
 *.log
-.DS_Store
-Thumbs.db

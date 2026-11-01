@@ -41,7 +41,7 @@ Explore the health endpoint and bearer-protected API:
 - `POST http://localhost:8080/api/v1/payments/authorizations` with an `Idempotency-Key` header
 - `GET http://localhost:8080/api/v1/operations/reconciliation/accounts` with an operations-role token
 
-The API validates JWT signatures, issuer, timestamps, and audience through Spring Security OAuth2 Resource Server. Realm roles become `ROLE_CUSTOMER` / `ROLE_OPERATIONS`; account ownership comes from the verified token's `preferred_username` claim. Customer endpoints require the customer role. Integration tests use a test-only fixed decoder and synthetic tokens, not a live identity provider.
+The API validates JWT signatures, issuer, timestamps, and audience through Spring Security OAuth2 Resource Server. Realm roles become `ROLE_CUSTOMER` / `ROLE_OPERATIONS`; account ownership comes from the verified token's `preferred_username` claim. Customer endpoints require the customer role. Browser CORS is restricted by `CORS_ALLOWED_ORIGINS` (local default `http://localhost:3000`), with bearer and idempotency headers explicitly allowed. Integration tests use a test-only fixed decoder and synthetic tokens, not a live identity provider.
 
 The bundled Keycloak uses `start-dev` and public synthetic users for local development only. Never use its development mode, demo passwords, or this service with real financial data. A deployed environment must use a separately managed production OIDC provider and secret/realm configuration.
 

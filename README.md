@@ -4,11 +4,11 @@ A portfolio project demonstrating production-minded quality engineering across w
 
 ## Current state
 
-The API includes PostgreSQL-backed synthetic accounts, cursor-paginated account and transaction reads, double-entry internal transfers, idempotency protection, structured errors, role-based JWT authorization, local OIDC configuration, RestAssured integration scenarios, and an API CI workflow. Payment lifecycle, clients, AI-assisted workflows, and end-to-end verification are follow-up slices.
+The API includes PostgreSQL-backed synthetic accounts, cursor-paginated account and transaction reads, double-entry internal transfers, idempotency protection, signed payment authorization/capture/void/refund flows, webhook inbox deduplication and retry handling, operations-only ledger reconciliation, structured errors, role-based JWT authorization, local OIDC configuration, and RestAssured integration scenarios. The React customer app is now being built against these APIs; Detox/Mobilewright, expanded Playwright/CI, AI-assisted test maintenance, and the GitHub Pages case study remain planned slices.
 
 ## Planned stack
 
-- Web: React, TypeScript, Playwright
+- Web: React, TypeScript, OIDC Authorization Code with PKCE, Playwright
 - Mobile: React Native, TypeScript, Detox baseline and expanded Mobilewright suite
 - API: Java 21, Spring Boot, PostgreSQL; RestAssured API automation
 - Identity: OIDC, Keycloak for local development, Spring Security resource server
@@ -25,6 +25,8 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml up -d
 ```
 
 Then follow [the API setup guide](services/api/README.md). Demo users and all financial records are synthetic. The local Keycloak dev image and credentials are not for production.
+
+The web application is in [apps/web](apps/web/README.md). It uses OIDC Authorization Code with PKCE and the customer-only API; browser configuration is provided through Vite environment variables.
 
 ## Product scenarios
 

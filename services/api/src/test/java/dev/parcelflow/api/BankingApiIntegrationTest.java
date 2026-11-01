@@ -88,6 +88,16 @@ class BankingApiIntegrationTest {
     }
 
     @Test
+    void corsPreflightAllowsTheConfiguredWebOriginAndBearerHeaders() {
+        given().header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Headers", "authorization,content-type")
+                .options("/api/v1/accounts").then().statusCode(200)
+                .header("Access-Control-Allow-Origin", equalTo("http://localhost:3000"))
+                .header("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("GET"));
+    }
+
+    @Test
     void accountReconciliationIsOperationsOnlyAndDetectsLedgerVariance() {
         customer().get("/api/v1/operations/reconciliation/accounts").then().statusCode(403);
         given().header("Authorization", "Bearer test-operations-token")
