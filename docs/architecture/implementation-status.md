@@ -15,13 +15,13 @@
 - [x] Return structured problem details with error codes and trace IDs.
 - [x] Add RestAssured scenarios against disposable PostgreSQL using Testcontainers.
 - [x] Add Docker Compose local PostgreSQL and API CI workflow.
-- [ ] Align the full contract with all current error/transfer responses and add account transaction history endpoint.
+- [x] Implement transaction history with status/date filters and opaque stable cursor pagination.
 - [ ] Run Maven verify and address any failures.
 
 ## Next slices
 
 1. Add authentication and authorization; remove fixed demo identity from request paths.
-2. Add transaction history, reversals, and reconciliation behavior.
+2. Add reversals and reconciliation behavior.
 3. Implement payment authorization, capture, void, refund, webhook retries, and reconciliation.
 4. Add broader RestAssured contract, boundary, concurrency, and fault-injection coverage.
 5. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.

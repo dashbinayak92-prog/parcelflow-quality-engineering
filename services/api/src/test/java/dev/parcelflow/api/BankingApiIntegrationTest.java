@@ -164,6 +164,32 @@ class BankingApiIntegrationTest {
                 .isEqualTo(1L);
     }
 
+    @Test
+    void transactionHistorySupportsStatusFilterAndStableCursorPagination() {
+        given().header("Idempotency-Key", "history-transfer-001").contentType("application/json")
+                .body(transferBody(CHECKING, SAVINGS, "15.00", "USD"))
+                .post("/api/v1/transfers").then().statusCode(201);
+        given().header("Idempotency-Key", "history-transfer-002").contentType("application/json")
+                .body(transferBody(CHECKING, SAVINGS, "20.00", "USD"))
+                .post("/api/v1/transfers").then().statusCode(201);
+
+        var pageOne = given().queryParam("limit", 1).get("/api/v1/accounts/{id}/transactions", CHECKING)
+                .then().statusCode(200).body("items.size()", equalTo(1))
+                .body("items[0].type", equalTo("TRANSFER_DEBIT"))
+                .body("items[0].status", equalTo("POSTED"))
+                .body("page.hasMore", equalTo(true));
+        var cursor = pageOne.extract().path("page.nextCursor");
+        var firstId = pageOne.extract().path("items[0].id");
+        var secondId = given().queryParam("limit", 1).queryParam("cursor", cursor)
+                .get("/api/v1/accounts/{id}/transactions", CHECKING)
+                .then().statusCode(200).body("items.size()", equalTo(1))
+                .body("page.hasMore", equalTo(false)).extract().path("items[0].id");
+
+        org.assertj.core.api.Assertions.assertThat(secondId).isNotEqualTo(firstId);
+        given().queryParam("status", "POSTED").get("/api/v1/accounts/{id}/transactions", CHECKING)
+                .then().statusCode(200).body("items.size()", equalTo(2));
+    }
+
     private String transferBody(String source, String destination, String amount, String currency) {
         return """
                 {"sourceAccountId":"%s","destinationAccountId":"%s","amount":{"amount":"%s","currency":"%s"},"memo":"QA demo transfer"}
