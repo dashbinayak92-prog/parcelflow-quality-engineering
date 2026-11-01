@@ -26,10 +26,18 @@
 - [x] Add a local Keycloak realm, PKCE public client, synthetic roles/users, and 401/403 integration scenarios.
 - [ ] Verify local Keycloak discovery, token audiences, and the full CI workflow.
 
+## Slice 3: synthetic payment lifecycle (implemented in source, verification pending)
+
+- [x] Add versioned authorization, operation, and idempotency schema with ledger linkage.
+- [x] Simulate approved, declined, and pending tokenized payment outcomes without storing raw payment credentials.
+- [x] Implement manual/automatic capture, partial capture, void, refund, ownership checks, and per-operation idempotency.
+- [x] Extend the OpenAPI contract and RestAssured scenarios for payment lifecycle and boundary outcomes.
+- [ ] Run Maven verify and address any failures.
+
 ## Next slices
 
 1. Add reversals and reconciliation behavior.
-2. Implement payment authorization, capture, void, refund, webhook retries, and reconciliation.
+2. Add webhook retries, ledger reversals, and payment reconciliation.
 3. Add broader RestAssured contract, boundary, and fault-injection coverage.
 4. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
 5. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.

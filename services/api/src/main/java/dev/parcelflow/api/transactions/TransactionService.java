@@ -28,7 +28,7 @@ public class TransactionService {
         var after = decodeCursor(cursor);
         var sql = new StringBuilder("""
                 SELECT t.id, t.entry_type, t.status, t.amount, t.currency, t.description,
-                       t.transfer_id, t.created_at, t.posted_at
+                       COALESCE(t.payment_authorization_id, t.transfer_id) AS related_id, t.created_at, t.posted_at
                 FROM account_transactions t
                 JOIN customer_accounts a ON a.id = t.account_id
                 WHERE a.owner_id = ? AND t.account_id = ?
@@ -59,7 +59,7 @@ public class TransactionService {
         return jdbc.query(sql.toString(), (rs, row) -> new TransactionPage.Entry(
                 rs.getObject("id", UUID.class), rs.getString("entry_type"), rs.getString("status"),
                 new dev.parcelflow.api.accounts.Account.Money(rs.getBigDecimal("amount"), rs.getString("currency").trim()),
-                rs.getString("description"), rs.getObject("transfer_id", UUID.class),
+                rs.getString("description"), rs.getObject("related_id", UUID.class),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("posted_at", OffsetDateTime.class)),
                 args.toArray());
     }

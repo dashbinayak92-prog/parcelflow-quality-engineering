@@ -56,8 +56,11 @@ class BankingApiIntegrationTest {
     void resetDatabase() {
         RestAssured.port = port;
         RestAssured.registerParser("application/problem+json", io.restassured.parsing.Parser.JSON);
-        jdbc.update("DELETE FROM transfer_idempotency");
         jdbc.update("DELETE FROM account_transactions");
+        jdbc.update("DELETE FROM payment_idempotency");
+        jdbc.update("DELETE FROM payment_operations");
+        jdbc.update("DELETE FROM payment_authorizations");
+        jdbc.update("DELETE FROM transfer_idempotency");
         jdbc.update("DELETE FROM transfers");
         jdbc.update("UPDATE customer_accounts SET ledger_balance = 2840.50, pending_debit = 225.00, version = 7 WHERE id = ?", java.util.UUID.fromString(CHECKING));
         jdbc.update("UPDATE customer_accounts SET ledger_balance = 12500.00, pending_debit = 0.00, version = 3 WHERE id = ?", java.util.UUID.fromString(SAVINGS));
@@ -215,6 +218,92 @@ class BankingApiIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(secondId).isNotEqualTo(firstId);
         customer().queryParam("status", "POSTED").get("/api/v1/accounts/{id}/transactions", CHECKING)
                 .then().statusCode(200).body("items.size()", equalTo(2));
+    }
+
+    @Test
+    void paymentAuthorizationCanBePartiallyCapturedAndRefundedIdempotently() {
+        var authorizationId = customer().header("Idempotency-Key", "payment-auth-001")
+                .contentType("application/json").body(authorizationBody("100.00", "tok_demo_approved_001", "MANUAL"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201)
+                .body("status", equalTo("AUTHORIZED"))
+                .body("capturedAmount.amount", equalTo("0.00"))
+                .extract().path("id");
+        customer().get("/api/v1/accounts/{id}", CHECKING).then().statusCode(200)
+                .body("balance.available.amount", equalTo("2515.50"))
+                .body("balance.pendingDebit.amount", equalTo("325.00"));
+
+        var firstCapture = customer().header("Idempotency-Key", "payment-cap-001").contentType("application/json")
+                .body("{\"amount\":{\"amount\":\"40.00\",\"currency\":\"USD\"}}")
+                .post("/api/v1/payments/authorizations/{id}/capture", authorizationId)
+                .then().statusCode(200).body("type", equalTo("CAPTURE"))
+                .body("amount.amount", equalTo("40.00")).extract().path("id");
+        var replayedCapture = customer().header("Idempotency-Key", "payment-cap-001").contentType("application/json")
+                .body("{\"amount\":{\"amount\":\"40.00\",\"currency\":\"USD\"}}")
+                .post("/api/v1/payments/authorizations/{id}/capture", authorizationId)
+                .then().statusCode(200).extract().path("id");
+        org.assertj.core.api.Assertions.assertThat(replayedCapture).isEqualTo(firstCapture);
+
+        customer().header("Idempotency-Key", "payment-cap-002").post("/api/v1/payments/authorizations/{id}/capture", authorizationId)
+                .then().statusCode(200).body("amount.amount", equalTo("60.00"));
+        customer().get("/api/v1/payments/authorizations/{id}", authorizationId).then().statusCode(200)
+                .body("status", equalTo("CAPTURED")).body("capturedAmount.amount", equalTo("100.00"));
+        customer().header("Idempotency-Key", "payment-refund-001").contentType("application/json")
+                .body("{\"amount\":{\"amount\":\"25.00\",\"currency\":\"USD\"}}")
+                .post("/api/v1/payments/authorizations/{id}/refunds", authorizationId)
+                .then().statusCode(201).body("type", equalTo("REFUND"));
+        customer().get("/api/v1/accounts/{id}", CHECKING).then().statusCode(200)
+                .body("balance.ledger.amount", equalTo("2765.50"))
+                .body("balance.pendingDebit.amount", equalTo("225.00"));
+        customer().queryParam("limit", 10).get("/api/v1/accounts/{id}/transactions", CHECKING)
+                .then().statusCode(200).body("items.findAll { it.type == 'PAYMENT_CAPTURE' }.size()", equalTo(2))
+                .body("items.findAll { it.type == 'PAYMENT_REFUND' }.size()", equalTo(1));
+    }
+
+    @Test
+    void paymentDeclinesAndPendingAuthorizationsHaveDeterministicOutcomes() {
+        customer().header("Idempotency-Key", "payment-decline-001").contentType("application/json")
+                .body(authorizationBody("20.00", "tok_demo_decline_dnh_001", "MANUAL"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201)
+                .body("status", equalTo("DECLINED")).body("declineCode", equalTo("DO_NOT_HONOR"));
+        customer().header("Idempotency-Key", "payment-funds-001").contentType("application/json")
+                .body(authorizationBody("3000.00", "tok_demo_approved_001", "MANUAL"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201)
+                .body("status", equalTo("DECLINED")).body("declineCode", equalTo("INSUFFICIENT_FUNDS"));
+        var pendingId = customer().header("Idempotency-Key", "payment-pending-001").contentType("application/json")
+                .body(authorizationBody("50.00", "tok_demo_timeout_001", "MANUAL"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201)
+                .body("status", equalTo("PENDING")).extract().path("id");
+        customer().header("Idempotency-Key", "payment-void-001")
+                .post("/api/v1/payments/authorizations/{id}/void", pendingId).then()
+                .statusCode(200).body("type", equalTo("VOID"));
+        customer().get("/api/v1/payments/authorizations/{id}", pendingId).then().statusCode(200)
+                .body("status", equalTo("VOIDED"));
+        customer().get("/api/v1/accounts/{id}", CHECKING).then().statusCode(200)
+                .body("balance.pendingDebit.amount", equalTo("225.00"));
+    }
+
+    @Test
+    void automaticCaptureAndRefundBoundariesAreEnforced() {
+        var authorizationId = customer().header("Idempotency-Key", "payment-auto-001").contentType("application/json")
+                .body(authorizationBody("20.00", "tok_demo_approved_001", "AUTOMATIC"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201)
+                .body("status", equalTo("CAPTURED")).body("capturedAmount.amount", equalTo("20.00"))
+                .extract().path("id");
+        customer().header("Idempotency-Key", "payment-refund-limit")
+                .contentType("application/json").body("{\"amount\":{\"amount\":\"20.01\",\"currency\":\"USD\"}}")
+                .post("/api/v1/payments/authorizations/{id}/refunds", authorizationId).then()
+                .statusCode(422).body("code", equalTo("REFUND_EXCEEDS_CAPTURE"));
+        customer().header("Idempotency-Key", "payment-refund-valid")
+                .contentType("application/json").body("{\"amount\":{\"amount\":\"20.00\",\"currency\":\"USD\"}}")
+                .post("/api/v1/payments/authorizations/{id}/refunds", authorizationId).then().statusCode(201);
+        customer().get("/api/v1/accounts/{id}", CHECKING).then().statusCode(200)
+                .body("balance.ledger.amount", equalTo("2840.50"));
+    }
+
+    private String authorizationBody(String amount, String token, String captureMode) {
+        return """
+                {"accountId":"%s","paymentToken":"%s","amount":{"amount":"%s","currency":"USD"},"merchantReference":"checkout-demo-001","captureMode":"%s","metadata":{"channel":"mobile","journey":"checkout"}}
+                """.formatted(CHECKING, token, amount, captureMode);
     }
 
     private String transferBody(String source, String destination, String amount, String currency) {

@@ -35,6 +35,7 @@ Explore the health endpoint and bearer-protected API:
 - `GET http://localhost:8080/api/v1/accounts/10000000-0000-4000-8000-000000000001`
 - `GET http://localhost:8080/api/v1/accounts/10000000-0000-4000-8000-000000000001/transactions`
 - `POST http://localhost:8080/api/v1/transfers` with an `Idempotency-Key` header
+- `POST http://localhost:8080/api/v1/payments/authorizations` with an `Idempotency-Key` header
 
 The API validates JWT signatures, issuer, timestamps, and audience through Spring Security OAuth2 Resource Server. Realm roles become `ROLE_CUSTOMER` / `ROLE_OPERATIONS`; account ownership comes from the verified token's `preferred_username` claim. Customer endpoints require the customer role. Integration tests use a test-only fixed decoder and synthetic tokens, not a live identity provider.
 
@@ -42,4 +43,17 @@ The bundled Keycloak uses `start-dev` and public synthetic users for local devel
 
 ## Integration tests
 
-The RestAssured suite uses Testcontainers to run against disposable PostgreSQL and covers unauthenticated and role-denied access. Docker must be available for `mvn verify`.
+The RestAssured suite uses Testcontainers to run against disposable PostgreSQL and covers authentication/authorization, balances and pagination, double-entry transfers, concurrent spend protection, transfer idempotency, payment holds, partial and automatic capture, voids, refunds, and payment idempotency. Docker must be available for `mvn verify`.
+
+### Synthetic payment simulator
+
+Payment requests accept simulator tokens only; the API never accepts PAN, CVV, or real provider credentials. Use these fixed fixtures for deterministic journey outcomes:
+
+| Token | Simulated outcome |
+| --- | --- |
+| `tok_demo_approved_001` | Approved; remains an authorization in `MANUAL` mode or captures immediately in `AUTOMATIC` mode |
+| `tok_demo_decline_funds_01` | Declined with `INSUFFICIENT_FUNDS` |
+| `tok_demo_decline_dnh_001` | Declined with `DO_NOT_HONOR` |
+| `tok_demo_timeout_001` | Pending authorization; can be voided to release its hold |
+
+Every authorize, capture, void, and refund request requires an `Idempotency-Key`. Authorization holds reduce available balance; capture moves the captured amount from pending debit to the ledger; void releases the uncaptured remainder; refunds credit captured amounts back to the synthetic account. These are local simulation semantics, not a connection to a payment processor.

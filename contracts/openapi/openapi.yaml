@@ -179,6 +179,67 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleError' }
+  /payments/authorizations/{authorizationId}:
+    get:
+      tags: [Payments]
+      summary: Get a payment authorization owned by the authenticated customer
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationId'
+      responses:
+        '200':
+          description: Authorization state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Authorization' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /payments/authorizations/{authorizationId}/void:
+    post:
+      tags: [Payments]
+      summary: Release an authorization's uncaptured hold
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Void operation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentOperation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleError' }
+  /payments/authorizations/{authorizationId}/refunds:
+    post:
+      tags: [Payments]
+      summary: Refund all or part of the captured payment
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { $ref: '#/components/schemas/Money' }
+      responses:
+        '201':
+          description: Refund operation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentOperation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -186,6 +247,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    AuthorizationId:
+      in: path
+      name: authorizationId
+      required: true
+      schema: { type: string, format: uuid }
     AccountId:
       in: path
       name: accountId
@@ -262,7 +333,7 @@ components:
       required: [id, type, status, amount, createdAt]
       properties:
         id: { type: string, format: uuid }
-        type: { type: string, enum: [TRANSFER_DEBIT, TRANSFER_CREDIT, AUTHORIZATION, CAPTURE, REFUND, REVERSAL, FEE] }
+        type: { type: string, enum: [TRANSFER_DEBIT, TRANSFER_CREDIT, PAYMENT_AUTHORIZATION, PAYMENT_CAPTURE, PAYMENT_REFUND] }
         status: { $ref: '#/components/schemas/TransactionStatus' }
         amount: { $ref: '#/components/schemas/Money' }
         description: { type: [string, 'null'], maxLength: 140 }
@@ -318,7 +389,7 @@ components:
       required: [id, status, amount, createdAt]
       properties:
         id: { type: string, format: uuid }
-        status: { type: string, enum: [AUTHORIZED, DECLINED, VOIDED, PARTIALLY_CAPTURED, CAPTURED, EXPIRED] }
+        status: { type: string, enum: [PENDING, AUTHORIZED, DECLINED, VOIDED, PARTIALLY_CAPTURED, CAPTURED, EXPIRED] }
         amount: { $ref: '#/components/schemas/Money' }
         capturedAmount: { $ref: '#/components/schemas/Money' }
         declineCode: { type: [string, 'null'], enum: [INSUFFICIENT_FUNDS, DO_NOT_HONOR, null] }
