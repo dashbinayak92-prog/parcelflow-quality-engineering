@@ -1,0 +1,339 @@
+openapi: 3.1.0
+info:
+  title: ParcelFlow Banking and Payments API
+  version: 1.0.0
+  description: Synthetic banking, payment, commerce, and fulfilment API for QA automation demonstrations. No real funds or payment data are handled.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: Accounts
+  - name: Transfers
+  - name: Payments
+paths:
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List synthetic accounts for the authenticated customer
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Account page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Account' }
+                  page: { $ref: '#/components/schemas/PageInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /accounts/{accountId}:
+    get:
+      tags: [Accounts]
+      summary: Get account and balances
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{accountId}/transactions:
+    get:
+      tags: [Accounts]
+      summary: List account ledger transactions
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/TransactionStatus' }
+        - in: query
+          name: from
+          description: Inclusive ISO-8601 date-time lower bound
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          description: Exclusive ISO-8601 date-time upper bound
+          schema: { type: string, format: date-time }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Transaction page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Transaction' }
+                  page: { $ref: '#/components/schemas/PageInfo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /transfers:
+    post:
+      tags: [Transfers]
+      summary: Create an internal account transfer
+      description: Idempotent per customer and Idempotency-Key. Amounts are debit/credit balanced in the simulated ledger.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+        - in: header
+          name: If-Match
+          required: false
+          description: Optional source account version for optimistic concurrency.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferRequest' }
+      responses:
+        '201':
+          description: Transfer accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleError' }
+  /payments/authorizations:
+    post:
+      tags: [Payments]
+      summary: Authorize a synthetic payment instrument
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthorizationRequest' }
+      responses:
+        '201':
+          description: Authorization created, including simulated decline outcomes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Authorization' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /payments/authorizations/{authorizationId}/capture:
+    post:
+      tags: [Payments]
+      summary: Capture all or part of an authorization
+      parameters:
+        - in: path
+          name: authorizationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { $ref: '#/components/schemas/Money' }
+      responses:
+        '200':
+          description: Capture result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentOperation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not found or not visible to this customer
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Idempotency or optimistic concurrency conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    BusinessRuleError:
+      description: Transfer violates business rules such as insufficient funds or a limit
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\\.[0-9]{1,4})?$'
+          examples: ['125.50']
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          examples: [USD]
+    Balance:
+      type: object
+      required: [ledger, available]
+      properties:
+        ledger: { $ref: '#/components/schemas/Money' }
+        available: { $ref: '#/components/schemas/Money' }
+        pendingDebit: { $ref: '#/components/schemas/Money' }
+        asOf: { type: string, format: date-time }
+    Account:
+      type: object
+      required: [id, displayName, maskedNumber, type, status, balance, version]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string, maxLength: 80 }
+        maskedNumber: { type: string, pattern: '^\\*{4}[0-9]{4}$' }
+        type: { type: string, enum: [CHECKING, SAVINGS] }
+        status: { type: string, enum: [ACTIVE, FROZEN, CLOSED] }
+        balance: { $ref: '#/components/schemas/Balance' }
+        version: { type: integer, minimum: 0 }
+    TransactionStatus:
+      type: string
+      enum: [PENDING, POSTED, REVERSED, DECLINED]
+    Transaction:
+      type: object
+      required: [id, type, status, amount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [TRANSFER_DEBIT, TRANSFER_CREDIT, AUTHORIZATION, CAPTURE, REFUND, REVERSAL, FEE] }
+        status: { $ref: '#/components/schemas/TransactionStatus' }
+        amount: { $ref: '#/components/schemas/Money' }
+        description: { type: [string, 'null'], maxLength: 140 }
+        relatedTransactionId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+        postedAt: { type: [string, 'null'], format: date-time }
+    PageInfo:
+      type: object
+      required: [hasMore]
+      properties:
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+    TransferRequest:
+      type: object
+      required: [sourceAccountId, destinationAccountId, amount]
+      properties:
+        sourceAccountId: { type: string, format: uuid }
+        destinationAccountId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        memo: { type: [string, 'null'], maxLength: 140 }
+        metadata:
+          type: object
+          additionalProperties: { type: string, maxLength: 256 }
+          maxProperties: 10
+    Transfer:
+      type: object
+      required: [id, status, amount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING, POSTED, DECLINED] }
+        amount: { $ref: '#/components/schemas/Money' }
+        sourceTransactionId: { type: string, format: uuid }
+        destinationTransactionId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+    AuthorizationRequest:
+      type: object
+      required: [accountId, paymentToken, amount, merchantReference]
+      properties:
+        accountId: { type: string, format: uuid }
+        paymentToken:
+          type: string
+          pattern: '^tok_[A-Za-z0-9_-]{12,80}$'
+          description: Synthetic token only; never a raw card number.
+        amount: { $ref: '#/components/schemas/Money' }
+        merchantReference: { type: string, minLength: 1, maxLength: 64 }
+        captureMode: { type: string, enum: [MANUAL, AUTOMATIC], default: MANUAL }
+        metadata:
+          type: object
+          additionalProperties: { type: string, maxLength: 256 }
+          maxProperties: 10
+    Authorization:
+      type: object
+      required: [id, status, amount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [AUTHORIZED, DECLINED, VOIDED, PARTIALLY_CAPTURED, CAPTURED, EXPIRED] }
+        amount: { $ref: '#/components/schemas/Money' }
+        capturedAmount: { $ref: '#/components/schemas/Money' }
+        declineCode: { type: [string, 'null'], enum: [INSUFFICIENT_FUNDS, DO_NOT_HONOR, null] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    PaymentOperation:
+      type: object
+      required: [id, authorizationId, type, status, amount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        authorizationId: { type: string, format: uuid }
+        type: { type: string, enum: [CAPTURE, VOID, REFUND] }
+        status: { type: string, enum: [PENDING, SUCCEEDED, FAILED] }
+        amount: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status, code, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: [string, 'null'] }
+        code: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string }
