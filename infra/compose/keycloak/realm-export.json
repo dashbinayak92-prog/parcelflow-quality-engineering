@@ -1,0 +1,82 @@
+{
+  "realm": "parcelflow",
+  "enabled": true,
+  "displayName": "ParcelFlow Local Demo",
+  "roles": {
+    "realm": [
+      { "name": "customer", "description": "Synthetic customer role" },
+      { "name": "operations", "description": "Synthetic operations role" }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "parcelflow-api-audience",
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "ParcelFlow API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "parcelflow-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "parcelflow-api",
+      "name": "ParcelFlow API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "parcelflow-web",
+      "name": "ParcelFlow Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://oauth.pstmn.io/v1/callback"
+      ],
+      "webOrigins": ["http://localhost:3000"],
+      "defaultClientScopes": [
+        "web-origins", "acr", "profile", "roles", "basic", "email", "parcelflow-api-audience"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "demo-customer-1",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": { "customerId": ["demo-customer-1"] },
+      "realmRoles": ["customer"],
+      "credentials": [
+        { "type": "password", "value": "demo-customer-pass", "temporary": false }
+      ]
+    },
+    {
+      "username": "demo-operations",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["operations"],
+      "credentials": [
+        { "type": "password", "value": "demo-operations-pass", "temporary": false }
+      ]
+    }
+  ]
+}

@@ -9,6 +9,12 @@ spring:
     password: ${DATABASE_PASSWORD:parcelflow-local-only}
   flyway:
     enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8090/realms/parcelflow}
+          audiences: ${OIDC_AUDIENCE:parcelflow-api}
 server:
   port: ${PORT:8080}
 management:

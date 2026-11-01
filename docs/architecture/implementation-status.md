@@ -18,15 +18,22 @@
 - [x] Implement transaction history with status/date filters and opaque stable cursor pagination.
 - [ ] Run Maven verify and address any failures.
 
+## Slice 2: identity and access (implemented in source, verification pending)
+
+- [x] Configure Spring Security as an OAuth 2.0 Resource Server with OIDC issuer, JWKS, timestamp, and audience validation.
+- [x] Map issuer realm roles to application roles and derive account ownership only from the verified token.
+- [x] Protect account, transaction, and transfer routes; keep only health probes public.
+- [x] Add a local Keycloak realm, PKCE public client, synthetic roles/users, and 401/403 integration scenarios.
+- [ ] Verify local Keycloak discovery, token audiences, and the full CI workflow.
+
 ## Next slices
 
-1. Add authentication and authorization; remove fixed demo identity from request paths.
-2. Add reversals and reconciliation behavior.
-3. Implement payment authorization, capture, void, refund, webhook retries, and reconciliation.
-4. Add broader RestAssured contract, boundary, concurrency, and fault-injection coverage.
-5. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
-6. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.
-7. Finish CI reports, deployment workflow, and GitHub Pages case study.
+1. Add reversals and reconciliation behavior.
+2. Implement payment authorization, capture, void, refund, webhook retries, and reconciliation.
+3. Add broader RestAssured contract, boundary, and fault-injection coverage.
+4. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
+5. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.
+6. Finish CI reports, deployment workflow, and GitHub Pages case study.
 
 ## Release decisions still needed
 

@@ -20,7 +20,6 @@ import java.util.UUID;
 
 @Service
 public class TransferService {
-    private static final String DEMO_OWNER = "demo-customer-1";
     private static final BigDecimal MAX_SINGLE_TRANSFER = new BigDecimal("5000.00");
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
@@ -31,7 +30,7 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferRequest.Result transfer(String idempotencyKey, TransferRequest request) {
+    public TransferRequest.Result transfer(String ownerId, String idempotencyKey, TransferRequest request) {
         if (request.sourceAccountId().equals(request.destinationAccountId())) {
             throw ApiException.unprocessable("SAME_ACCOUNT", "Source and destination accounts must differ");
         }
@@ -46,12 +45,12 @@ public class TransferService {
                 INSERT INTO transfer_idempotency(owner_id, idempotency_key, request_hash, transfer_id, created_at)
                 VALUES (?, ?, ?, NULL, ?)
                 ON CONFLICT (owner_id, idempotency_key) DO NOTHING
-                """, DEMO_OWNER, idempotencyKey, requestHash, OffsetDateTime.now(ZoneOffset.UTC));
+                """, ownerId, idempotencyKey, requestHash, OffsetDateTime.now(ZoneOffset.UTC));
         Prior previous = jdbc.query("""
                 SELECT request_hash, transfer_id FROM transfer_idempotency
                 WHERE owner_id = ? AND idempotency_key = ? FOR UPDATE
                 """, rs -> rs.next() ? new Prior(rs.getString(1), rs.getObject(2, UUID.class)) : null,
-                DEMO_OWNER, idempotencyKey);
+                ownerId, idempotencyKey);
         if (previous == null) {
             throw ApiException.conflict("IDEMPOTENCY_CONFLICT", "Idempotency record could not be acquired");
         }
@@ -61,7 +60,7 @@ public class TransferService {
         }
         if (previous.transferId() != null) return findResult(previous.transferId());
 
-        var accounts = lockAccounts(request.sourceAccountId(), request.destinationAccountId());
+        var accounts = lockAccounts(ownerId, request.sourceAccountId(), request.destinationAccountId());
         var source = accounts.stream().filter(account -> account.id().equals(request.sourceAccountId())).findFirst()
                 .orElseThrow(() -> ApiException.notFound("SOURCE_ACCOUNT_NOT_FOUND", "Source account not found"));
         var destination = accounts.stream().filter(account -> account.id().equals(request.destinationAccountId())).findFirst()
@@ -87,22 +86,22 @@ public class TransferService {
         jdbc.update("""
                 INSERT INTO transfers(id, owner_id, source_account_id, destination_account_id, amount, currency, status, memo, metadata, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'POSTED', ?, ?::jsonb, ?)
-                """, transferId, DEMO_OWNER, source.id(), destination.id(), amount, source.currency(), request.memo(), metadataJson, now);
+                """, transferId, ownerId, source.id(), destination.id(), amount, source.currency(), request.memo(), metadataJson, now);
         insertEntry(debitId, transferId, source.id(), "TRANSFER_DEBIT", amount, source.currency(), request.memo(), now);
         insertEntry(creditId, transferId, destination.id(), "TRANSFER_CREDIT", amount, source.currency(), request.memo(), now);
         jdbc.update("UPDATE transfer_idempotency SET transfer_id = ? WHERE owner_id = ? AND idempotency_key = ?",
-                transferId, DEMO_OWNER, idempotencyKey);
+                transferId, ownerId, idempotencyKey);
         return new TransferRequest.Result(transferId, "POSTED",
                 new TransferRequest.Amount(amount, source.currency()), debitId, creditId, now);
     }
 
-    private List<LockedAccount> lockAccounts(UUID sourceId, UUID destinationId) {
+    private List<LockedAccount> lockAccounts(String ownerId, UUID sourceId, UUID destinationId) {
         return jdbc.query("""
                 SELECT id, status, ledger_balance, pending_debit, currency
                 FROM customer_accounts WHERE owner_id = ? AND id IN (?, ?) ORDER BY id FOR UPDATE
                 """, (rs, row) -> new LockedAccount(rs.getObject("id", UUID.class), rs.getString("status"),
                 rs.getBigDecimal("ledger_balance"), rs.getBigDecimal("pending_debit"), rs.getString("currency").trim()),
-                DEMO_OWNER, sourceId, destinationId);
+                ownerId, sourceId, destinationId);
     }
 
     private void insertEntry(UUID id, UUID transferId, UUID accountId, String type, BigDecimal amount,

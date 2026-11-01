@@ -1,8 +1,10 @@
 package dev.parcelflow.api.transactions;
 
-import dev.parcelflow.api.DemoPrincipal;
 import dev.parcelflow.api.accounts.AccountService;
 import dev.parcelflow.api.errors.ApiException;
+import dev.parcelflow.api.security.CustomerIdentity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,22 +20,26 @@ import java.util.UUID;
 public class AccountTransactionController {
     private static final Set<String> VALID_STATUSES = Set.of("PENDING", "POSTED", "REVERSED", "DECLINED");
     private final AccountService accountService;
+    private final CustomerIdentity customerIdentity;
     private final TransactionService transactionService;
 
-    public AccountTransactionController(AccountService accountService, TransactionService transactionService) {
+    public AccountTransactionController(AccountService accountService, CustomerIdentity customerIdentity,
+                                        TransactionService transactionService) {
         this.accountService = accountService;
+        this.customerIdentity = customerIdentity;
         this.transactionService = transactionService;
     }
 
     @GetMapping
     public TransactionPage list(
+            @AuthenticationPrincipal Jwt principal,
             @PathVariable UUID accountId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit) {
-        var ownerId = DemoPrincipal.CUSTOMER_ID;
+        var ownerId = customerIdentity.ownerId(principal);
         if (accountService.findById(ownerId, accountId).isEmpty()) {
             throw ApiException.notFound("ACCOUNT_NOT_FOUND", "Account not found");
         }

@@ -14,5 +14,16 @@ services:
       retries: 10
     volumes:
       - parcelflow-postgres:/var/lib/postgresql/data
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: local-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD for local Keycloak}
+      KC_HOSTNAME: http://localhost:8090
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/parcelflow-realm.json:ro
 volumes:
   parcelflow-postgres:
