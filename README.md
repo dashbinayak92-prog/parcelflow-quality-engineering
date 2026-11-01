@@ -4,7 +4,7 @@ A portfolio project demonstrating production-minded quality engineering across w
 
 ## Current state
 
-The first executable API slice is in place: synthetic account list and detail endpoints, an OpenAPI contract, Spring Boot service shell, and Actuator health endpoint. The account fixtures are in memory. Authentication, persistence, transfer writes, payment lifecycle, clients, automation, and CI are follow-up slices.
+The first banking vertical slice is in place in source: PostgreSQL-backed synthetic accounts, account reads, double-entry internal transfers, idempotency, structured errors, RestAssured integration scenarios, and an API CI workflow. Authentication, payment lifecycle, clients, AI-assisted workflows, and end-to-end verification are follow-up slices.
 
 ## Planned stack
 
@@ -16,7 +16,7 @@ The first executable API slice is in place: synthetic account list and detail en
 
 ## Run the API
 
-With JDK 21+ and Maven installed:
+With JDK 21+, Maven, and Docker Compose installed, start PostgreSQL from the repository root with `docker compose -f infra/compose/docker-compose.yml up -d`, then run the API:
 
 ```powershell
 cd services/api

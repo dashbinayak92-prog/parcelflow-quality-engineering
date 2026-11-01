@@ -3,6 +3,12 @@ spring:
     name: parcelflow-api
   jackson:
     default-property-inclusion: non_null
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/parcelflow}
+    username: ${DATABASE_USER:parcelflow}
+    password: ${DATABASE_PASSWORD:parcelflow-local-only}
+  flyway:
+    enabled: true
 server:
   port: ${PORT:8080}
 management:
