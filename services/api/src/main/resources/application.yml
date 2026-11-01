@@ -17,6 +17,9 @@ spring:
           audiences: ${OIDC_AUDIENCE:parcelflow-api}
 server:
   port: ${PORT:8080}
+parcelflow:
+  payments:
+    webhook-secret: ${PAYMENT_WEBHOOK_SECRET:local-only-parcelflow-webhook-secret}
 management:
   endpoints:
     web:

@@ -21,8 +21,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -44,6 +48,7 @@ class BankingApiIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("parcelflow.payments.webhook-secret", () -> "integration-test-webhook-secret");
     }
 
     @LocalServerPort
@@ -56,6 +61,7 @@ class BankingApiIntegrationTest {
     void resetDatabase() {
         RestAssured.port = port;
         RestAssured.registerParser("application/problem+json", io.restassured.parsing.Parser.JSON);
+        jdbc.update("DELETE FROM payment_webhook_inbox");
         jdbc.update("DELETE FROM account_transactions");
         jdbc.update("DELETE FROM payment_idempotency");
         jdbc.update("DELETE FROM payment_operations");
@@ -318,6 +324,67 @@ class BankingApiIntegrationTest {
                 .post("/api/v1/payments/authorizations/{id}/refunds", authorizationId).then().statusCode(201);
         customer().get("/api/v1/accounts/{id}", CHECKING).then().statusCode(200)
                 .body("balance.ledger.amount", equalTo("2840.50"));
+    }
+
+    @Test
+    void signedPaymentWebhookIsDeduplicatedAndCanBeRetriedAfterDependencyAppears() {
+        var authorizationId = customer().header("Idempotency-Key", "payment-webhook-auth")
+                .contentType("application/json").body(authorizationBody("12.00", "tok_demo_approved_001", "MANUAL"))
+                .post("/api/v1/payments/authorizations").then().statusCode(201).extract().path("id");
+        var operationId = java.util.UUID.randomUUID();
+        var eventId = java.util.UUID.randomUUID();
+        var payload = """
+                {"id":"%s","type":"payment.operation.succeeded","authorizationId":"%s","operationId":"%s","occurredAt":"2026-11-01T12:00:00Z"}
+                """.formatted(eventId, authorizationId, operationId);
+        var sentAt = String.valueOf(Instant.now().getEpochSecond());
+
+        given().header("X-Webhook-Timestamp", sentAt).header("X-Webhook-Signature", webhookSignature(sentAt, payload))
+                .contentType("application/json").body(payload).post("/api/v1/webhooks/payments")
+                .then().statusCode(202).body("status", equalTo("RECEIVED"))
+                .body("deliveryAttempts", equalTo(1)).body("lastError", equalTo("OPERATION_NOT_AVAILABLE"));
+
+        jdbc.update("""
+                INSERT INTO payment_operations(id, owner_id, authorization_id, type, status, amount, currency, created_at)
+                VALUES (?, 'demo-customer-1', ?, 'CAPTURE', 'SUCCEEDED', 12.00, 'USD', ?)
+                """, operationId, java.util.UUID.fromString(authorizationId), java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
+
+        sentAt = String.valueOf(Instant.now().getEpochSecond());
+        given().header("X-Webhook-Timestamp", sentAt).header("X-Webhook-Signature", webhookSignature(sentAt, payload))
+                .contentType("application/json").body(payload).post("/api/v1/webhooks/payments")
+                .then().statusCode(202).body("status", equalTo("PROCESSED")).body("deliveryAttempts", equalTo(2));
+        sentAt = String.valueOf(Instant.now().getEpochSecond());
+        given().header("X-Webhook-Timestamp", sentAt).header("X-Webhook-Signature", webhookSignature(sentAt, payload))
+                .contentType("application/json").body(payload).post("/api/v1/webhooks/payments")
+                .then().statusCode(202).body("status", equalTo("PROCESSED")).body("deliveryAttempts", equalTo(3));
+        var changedPayload = payload.replace("12:00:00Z", "12:01:00Z");
+        sentAt = String.valueOf(Instant.now().getEpochSecond());
+        given().header("X-Webhook-Timestamp", sentAt).header("X-Webhook-Signature", webhookSignature(sentAt, changedPayload))
+                .contentType("application/json").body(changedPayload).post("/api/v1/webhooks/payments")
+                .then().statusCode(409).body("code", equalTo("WEBHOOK_EVENT_ID_REUSED"));
+    }
+
+    @Test
+    void webhookEndpointRejectsInvalidSignaturesAndStaleTimestamps() {
+        var payload = "{\"id\":\"20000000-0000-4000-8000-000000000001\",\"type\":\"payment.operation.succeeded\",\"authorizationId\":\"10000000-0000-4000-8000-000000000001\",\"operationId\":\"30000000-0000-4000-8000-000000000001\",\"occurredAt\":\"2026-11-01T12:00:00Z\"}";
+        var sentAt = String.valueOf(Instant.now().getEpochSecond());
+        given().header("X-Webhook-Timestamp", sentAt).header("X-Webhook-Signature", "sha256=bad")
+                .contentType("application/json").body(payload).post("/api/v1/webhooks/payments")
+                .then().statusCode(401).body("code", equalTo("INVALID_WEBHOOK_SIGNATURE"));
+        var stale = String.valueOf(Instant.now().getEpochSecond() - 301);
+        given().header("X-Webhook-Timestamp", stale).header("X-Webhook-Signature", webhookSignature(stale, payload))
+                .contentType("application/json").body(payload).post("/api/v1/webhooks/payments")
+                .then().statusCode(401).body("code", equalTo("STALE_WEBHOOK"));
+    }
+
+    private String webhookSignature(String timestamp, String payload) {
+        try {
+            var mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec("integration-test-webhook-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            var content = (timestamp + "." + payload).getBytes(StandardCharsets.UTF_8);
+            return "sha256=" + HexFormat.of().formatHex(mac.doFinal(content));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to sign integration webhook", exception);
+        }
     }
 
     private String authorizationBody(String amount, String token, String captureMode) {

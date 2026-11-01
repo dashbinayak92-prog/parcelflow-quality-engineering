@@ -254,6 +254,39 @@ paths:
               schema: { $ref: '#/components/schemas/ReconciliationReport' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /webhooks/payments:
+    post:
+      tags: [Payments]
+      summary: Receive a signed synthetic payment operation event
+      description: HMAC-SHA256 signature is computed over the timestamp, a period, and the exact raw JSON request body. Retries with a matching event ID and payload are deduplicated and counted.
+      security: []
+      parameters:
+        - in: header
+          name: X-Webhook-Timestamp
+          required: true
+          schema: { type: string, pattern: '^[0-9]{10}$' }
+        - in: header
+          name: X-Webhook-Signature
+          required: true
+          schema: { type: string, pattern: '^sha256=[a-f0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentWebhookEvent' }
+      responses:
+        '202':
+          description: Event stored or processed; redelivery can resume a received event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentWebhookReceipt' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401':
+          description: Invalid or stale webhook signature
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     bearerAuth:
@@ -439,6 +472,23 @@ components:
               expectedBalance: { $ref: '#/components/schemas/Money' }
               variance: { $ref: '#/components/schemas/ReconciliationMoney' }
               status: { type: string, enum: [MATCH, MISMATCH] }
+    PaymentWebhookEvent:
+      type: object
+      required: [id, type, authorizationId, operationId, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [payment.operation.succeeded] }
+        authorizationId: { type: string, format: uuid }
+        operationId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+    PaymentWebhookReceipt:
+      type: object
+      required: [eventId, status, deliveryAttempts]
+      properties:
+        eventId: { type: string, format: uuid }
+        status: { type: string, enum: [RECEIVED, PROCESSED] }
+        deliveryAttempts: { type: integer, minimum: 1 }
+        lastError: { type: [string, 'null'] }
     ReconciliationMoney:
       type: object
       required: [amount, currency]

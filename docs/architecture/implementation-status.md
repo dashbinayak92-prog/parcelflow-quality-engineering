@@ -42,10 +42,18 @@
 - [x] Protect the read-only report with the operations role and include mismatch detection scenarios.
 - [ ] Run Maven verify and address any failures.
 
+## Slice 5: signed payment webhook inbox (implemented in source, verification pending)
+
+- [x] Verify HMAC signatures over the timestamp and exact raw request body, with a bounded clock-skew window.
+- [x] Persist event IDs and payload hashes, count duplicate deliveries, and reject conflicting event-ID reuse.
+- [x] Allow safe redelivery to resume an event while its referenced payment operation is not yet available.
+- [x] Extend the OpenAPI contract and RestAssured scenarios for signatures, stale events, retries, and deduplication.
+- [ ] Run Maven verify and address any failures.
+
 ## Next slices
 
 1. Add reversals and reconciliation behavior.
-2. Add signed webhook intake, delivery deduplication/retries, and ledger reversals.
+2. Add ledger reversals and reconciliation exception workflows.
 3. Add broader RestAssured contract, boundary, and fault-injection coverage.
 4. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
 5. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.

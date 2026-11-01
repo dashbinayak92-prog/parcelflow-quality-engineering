@@ -15,8 +15,11 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml up -d
 Start the API from `services/api`:
 
 ```powershell
+$env:PAYMENT_WEBHOOK_SECRET = "local-only-parcelflow-webhook-secret"
 mvn spring-boot:run
 ```
+
+The webhook simulator uses `PAYMENT_WEBHOOK_SECRET` for HMAC-SHA256 verification. This example value is for local synthetic data only. Use a managed secret in deployed environments.
 
 Keycloak is configured as a local development identity provider. Obtain a customer token using OAuth 2.0 Authorization Code with PKCE (for example, in Postman):
 
@@ -60,3 +63,7 @@ Payment requests accept simulator tokens only; the API never accepts PAN, CVV, o
 Every authorize, capture, void, and refund request requires an `Idempotency-Key`. Authorization holds reduce available balance; capture moves the captured amount from pending debit to the ledger; void releases the uncaptured remainder; refunds credit captured amounts back to the synthetic account. These are local simulation semantics, not a connection to a payment processor.
 
 The operations reconciliation endpoint compares each current ledger balance with its persisted opening balance plus posted transfer, capture, and refund entries. It reports per-account variance and does not mutate balances. It requires the `operations` realm role; a customer-role token receives `403`.
+
+### Payment webhooks
+
+`POST /api/v1/webhooks/payments` accepts signed synthetic `payment.operation.succeeded` events without a customer JWT. The caller sends `X-Webhook-Timestamp` (Unix seconds) and `X-Webhook-Signature` (`sha256=<hex>`). The HMAC input is the timestamp, a period, and the exact raw JSON request bytes. Requests outside the five-minute clock window are rejected. The inbox stores event IDs and payload hashes, counts redeliveries, rejects reuse of an event ID with a different payload, and retries a received event when the referenced operation becomes available. Configure provider retry/backoff policy outside this API; the endpoint is safe for at-least-once delivery. The inbox does not post ledger entries a second time.
