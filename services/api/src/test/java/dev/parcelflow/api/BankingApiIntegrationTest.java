@@ -82,6 +82,23 @@ class BankingApiIntegrationTest {
     }
 
     @Test
+    void accountReconciliationIsOperationsOnlyAndDetectsLedgerVariance() {
+        customer().get("/api/v1/operations/reconciliation/accounts").then().statusCode(403);
+        given().header("Authorization", "Bearer test-operations-token")
+                .get("/api/v1/operations/reconciliation/accounts").then().statusCode(200)
+                .body("status", equalTo("COMPLETED"))
+                .body("accountCount", equalTo(3)).body("mismatchCount", equalTo(0));
+
+        jdbc.update("UPDATE customer_accounts SET ledger_balance = ledger_balance + 1.00 WHERE id = ?",
+                java.util.UUID.fromString(CHECKING));
+        given().header("Authorization", "Bearer test-operations-token")
+                .get("/api/v1/operations/reconciliation/accounts").then().statusCode(200)
+                .body("mismatchCount", equalTo(1))
+                .body("accounts.find { it.accountId == '" + CHECKING + "' }.variance.amount", equalTo("1.00"))
+                .body("accounts.find { it.accountId == '" + CHECKING + "' }.status", equalTo("MISMATCH"));
+    }
+
+    @Test
     void accountReadsExposeLedgerAvailableAndCurrency() {
         customer()
                 .when().get("/api/v1/accounts")
@@ -257,6 +274,9 @@ class BankingApiIntegrationTest {
         customer().queryParam("limit", 10).get("/api/v1/accounts/{id}/transactions", CHECKING)
                 .then().statusCode(200).body("items.findAll { it.type == 'PAYMENT_CAPTURE' }.size()", equalTo(2))
                 .body("items.findAll { it.type == 'PAYMENT_REFUND' }.size()", equalTo(1));
+        given().header("Authorization", "Bearer test-operations-token")
+                .get("/api/v1/operations/reconciliation/accounts").then().statusCode(200)
+                .body("mismatchCount", equalTo(0));
     }
 
     @Test

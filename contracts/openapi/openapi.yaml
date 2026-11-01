@@ -12,6 +12,7 @@ tags:
   - name: Accounts
   - name: Transfers
   - name: Payments
+  - name: Operations
 paths:
   /accounts:
     get:
@@ -240,6 +241,19 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleError' }
+  /operations/reconciliation/accounts:
+    get:
+      tags: [Operations]
+      summary: Reconcile account ledger balances against posted journal entries
+      description: Operations-role endpoint. Reports discrepancies without mutating account balances.
+      responses:
+        '200':
+          description: Reconciliation report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationReport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   securitySchemes:
     bearerAuth:
@@ -405,6 +419,34 @@ components:
         status: { type: string, enum: [PENDING, SUCCEEDED, FAILED] }
         amount: { $ref: '#/components/schemas/Money' }
         createdAt: { type: string, format: date-time }
+    ReconciliationReport:
+      type: object
+      required: [status, accountCount, mismatchCount, completedAt, accounts]
+      properties:
+        status: { type: string, enum: [COMPLETED] }
+        accountCount: { type: integer, minimum: 0 }
+        mismatchCount: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [accountId, accountName, ledgerBalance, expectedBalance, variance, status]
+            properties:
+              accountId: { type: string, format: uuid }
+              accountName: { type: string }
+              ledgerBalance: { $ref: '#/components/schemas/Money' }
+              expectedBalance: { $ref: '#/components/schemas/Money' }
+              variance: { $ref: '#/components/schemas/ReconciliationMoney' }
+              status: { type: string, enum: [MATCH, MISMATCH] }
+    ReconciliationMoney:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^-?(0|[1-9][0-9]*)(\.[0-9]{1,2})?$'
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
     Problem:
       type: object
       required: [type, title, status, code, traceId]

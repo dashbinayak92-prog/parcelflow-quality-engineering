@@ -36,6 +36,7 @@ Explore the health endpoint and bearer-protected API:
 - `GET http://localhost:8080/api/v1/accounts/10000000-0000-4000-8000-000000000001/transactions`
 - `POST http://localhost:8080/api/v1/transfers` with an `Idempotency-Key` header
 - `POST http://localhost:8080/api/v1/payments/authorizations` with an `Idempotency-Key` header
+- `GET http://localhost:8080/api/v1/operations/reconciliation/accounts` with an operations-role token
 
 The API validates JWT signatures, issuer, timestamps, and audience through Spring Security OAuth2 Resource Server. Realm roles become `ROLE_CUSTOMER` / `ROLE_OPERATIONS`; account ownership comes from the verified token's `preferred_username` claim. Customer endpoints require the customer role. Integration tests use a test-only fixed decoder and synthetic tokens, not a live identity provider.
 
@@ -57,3 +58,5 @@ Payment requests accept simulator tokens only; the API never accepts PAN, CVV, o
 | `tok_demo_timeout_001` | Pending authorization; can be voided to release its hold |
 
 Every authorize, capture, void, and refund request requires an `Idempotency-Key`. Authorization holds reduce available balance; capture moves the captured amount from pending debit to the ledger; void releases the uncaptured remainder; refunds credit captured amounts back to the synthetic account. These are local simulation semantics, not a connection to a payment processor.
+
+The operations reconciliation endpoint compares each current ledger balance with its persisted opening balance plus posted transfer, capture, and refund entries. It reports per-account variance and does not mutate balances. It requires the `operations` realm role; a customer-role token receives `403`.

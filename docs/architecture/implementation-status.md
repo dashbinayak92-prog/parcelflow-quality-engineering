@@ -32,12 +32,20 @@
 - [x] Simulate approved, declined, and pending tokenized payment outcomes without storing raw payment credentials.
 - [x] Implement manual/automatic capture, partial capture, void, refund, ownership checks, and per-operation idempotency.
 - [x] Extend the OpenAPI contract and RestAssured scenarios for payment lifecycle and boundary outcomes.
+- [x] Add an operations-only ledger reconciliation report with per-account variance and no-write behavior.
+- [ ] Run Maven verify and address any failures.
+
+## Slice 4: operations ledger reconciliation (implemented in source, verification pending)
+
+- [x] Persist an opening ledger baseline, including safe backfill from prior posted activity.
+- [x] Reconcile current account ledger balances against posted transfer, capture, and refund entries.
+- [x] Protect the read-only report with the operations role and include mismatch detection scenarios.
 - [ ] Run Maven verify and address any failures.
 
 ## Next slices
 
 1. Add reversals and reconciliation behavior.
-2. Add webhook retries, ledger reversals, and payment reconciliation.
+2. Add signed webhook intake, delivery deduplication/retries, and ledger reversals.
 3. Add broader RestAssured contract, boundary, and fault-injection coverage.
 4. Build web and mobile journeys, then Detox baseline and Mobilewright migration suite.
 5. Add AI-assisted test-change workflow with benchmark, review gate, and failure/bottleneck triage.

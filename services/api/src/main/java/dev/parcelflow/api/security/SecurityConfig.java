@@ -47,6 +47,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/api/v1/operations/**").hasRole("OPERATIONS")
                         .requestMatchers("/api/v1/accounts/**", "/api/v1/transfers/**", "/api/v1/payments/**").hasRole("CUSTOMER")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
